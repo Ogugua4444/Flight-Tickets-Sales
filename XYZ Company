@@ -1,0 +1,64 @@
+---Lets review the data within the year 2024
+Select *
+From ARInvoiceDetails
+Where TransactionDate like '%2024%'
+
+
+
+---This is where is group transactions by invoiceid.
+SELECT
+    MIN(T.InvoiceDetailID) AS InvoiceDetailID,
+    T.InvoiceID, 
+    T.TransactionDate, 
+    T.TransactionType, 
+    T.CurrencyCode, 
+    T.PassengerName,
+    MAX(T.ValidatingCarrier) AS ValidatingCarrier,
+    MAX(CASE WHEN T.TicketNumber <> '' THEN TicketNumber ELSE '' END) AS TicketNumber,
+    MAX(CASE WHEN T.OriginalTicket <> '' THEN OriginalTicket ELSE '' END) AS OriginalTicket,
+    MAX(T.CityCode) AS CityCode,
+    MAX(CAST(T.International AS INT)) AS International,
+    MAX(T.Source) AS Source,
+    SUM(T.CommissionAmount) AS CommissionAmount,
+    SUM(T.VatOnCommission) AS VatOnCommission,
+    SUM(T.PublishedFare) AS PublishedFare,
+    SUM(T.GrossAmount) AS GrossAmount,
+    SUM(T.SellingFare) AS SellingFare,
+    SUM(CASE WHEN T.ProductCode = 8 THEN T.GrossAmount ELSE 0 END) AS Profit,
+    SUM(CASE WHEN T.ProductCode = 11 THEN T.GrossAmount ELSE 0 END) AS Dip,
+    SUM(CASE WHEN T.ProductCode = 12 THEN T.GrossAmount ELSE 0 END) AS Discount,
+    MAX(T.TravelDate) AS TravelDate,
+    MAX(T.ReturnDate) AS ReturnDate,
+	CASE 
+        WHEN MAX(CASE WHEN P.TicketFormat <> '' THEN 1 ELSE 0 END) = 1 THEN MAX(CASE WHEN P.TicketFormat <> '' THEN P.ProductCode ELSE NULL END)
+        ELSE MAX(CASE WHEN T.InvoiceDetailID = MinDetails.MinInvoiceDetailID THEN T.ProductCode ELSE NULL END)
+    END AS FirstProductCode,
+    MAX(CASE WHEN T.OriginalTicket <> '' AND P.TicketFormat <> '' THEN 'Reissue' ELSE NULL END) AS ReissuedTicket
+FROM 
+    ARInvoiceDetails T
+
+LEFT JOIN ProductCodes P ON T.ProductCode = P.ProductCode
+
+LEFT JOIN (
+    SELECT 
+        InvoiceID,
+        PassengerName,
+        TransactionType,
+        TransactionDate,
+        CurrencyCode,
+        MIN(InvoiceDetailID) AS MinInvoiceDetailID
+    FROM ARInvoiceDetails
+    GROUP BY InvoiceID, PassengerName, TransactionType, TransactionDate, CurrencyCode
+) MinDetails ON T.InvoiceID = MinDetails.InvoiceID 
+    AND T.PassengerName = MinDetails.PassengerName
+    AND T.TransactionType = MinDetails.TransactionType  -- Added for precise match
+    AND T.TransactionDate = MinDetails.TransactionDate  -- Added for precise match
+    AND T.CurrencyCode = MinDetails.CurrencyCode        -- Added for precise match
+WHERE T.TransactionType = 1 --AND CONVERT(DATE, T.TransactionDate) > '2021-12-31' --AND TicketNumber like '%483-6359579113'
+GROUP BY 
+    T.InvoiceID, 
+    T.TransactionDate, 
+    T.TransactionType, 
+    T.CurrencyCode,
+    T.PassengerName
+Order By T.TransactionDate
